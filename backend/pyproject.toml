@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cloudpulse-api"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "alembic==1.19.1",
+  "asyncpg==0.31.0",
+  "fastapi==0.141.1",
+  "pydantic-settings==2.15.0",
+  "sqlalchemy[asyncio]==2.0.52",
+  "uvicorn[standard]==0.52.3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx2==2.10.0",
+  "pytest==9.1.1",
+  "pytest-asyncio==1.4.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"

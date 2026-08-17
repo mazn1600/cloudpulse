@@ -13,3 +13,4 @@ backend/.pytest_cache/
 backend/.coverage
 backend/htmlcov/
 *.py[cod]
+*.egg-info/

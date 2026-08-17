@@ -64,6 +64,7 @@ backend/.pytest_cache/
 backend/.coverage
 backend/htmlcov/
 *.py[cod]
+*.egg-info/
 ```
 
 - [ ] **Step 2: Write the initial project entrypoint**
@@ -159,7 +160,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "httpx==0.28.1",
+  "httpx2==2.10.0",
   "pytest==9.1.1",
   "pytest-asyncio==1.4.0",
 ]
@@ -878,7 +879,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "httpx==0.28.1",
+  "httpx2==2.10.0",
   "pytest==9.1.1",
   "pytest-asyncio==1.4.0",
 ]
