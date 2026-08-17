@@ -5,7 +5,7 @@ CloudPulse is an infrastructure-first learning project. The application is a sma
 ## Milestone 1
 
 ```text
-Browser → Next.js :3000 → FastAPI :8000 → PostgreSQL :5432
+Browser → Next.js :3000 → FastAPI :8000 → PostgreSQL :5433
 ```
 
 The frontend shows a small infrastructure dashboard. FastAPI exposes health, readiness, dashboard, and deployment endpoints. PostgreSQL stores deployment history only.

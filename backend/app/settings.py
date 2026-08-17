@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     database_url: str = (
-        "postgresql+asyncpg://cloudpulse:cloudpulse@localhost:5432/cloudpulse"
+        "postgresql+asyncpg://cloudpulse:cloudpulse@localhost:5433/cloudpulse"
     )
     frontend_origin: str = "http://localhost:3000"
 

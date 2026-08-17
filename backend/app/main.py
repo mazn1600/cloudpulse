@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import dashboard, health
+from app.routers import dashboard, deployments, health
 from app.settings import get_settings
 
 
@@ -16,3 +16,4 @@ app.add_middleware(
 )
 app.include_router(health.router)
 app.include_router(dashboard.router)
+app.include_router(deployments.router)

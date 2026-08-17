@@ -23,7 +23,7 @@ FastAPI backend (localhost:8000)
   |
   | SQL
   v
-PostgreSQL (localhost:5432)
+PostgreSQL (localhost:5433)
 ```
 
 The repository is a monorepo with three clear areas:
@@ -59,7 +59,7 @@ PostgreSQL stores only deployment records in this milestone. Metrics and logs ar
 ## Configuration and Security
 
 - Node.js 24 LTS runs the frontend; Python 3.12 runs the backend.
-- Local ports are `3000` for Next.js, `8000` for FastAPI, and `5432` for PostgreSQL.
+- Local ports are `3000` for Next.js, `8000` for FastAPI, and `5433` for PostgreSQL because an existing PostgreSQL installation owns the standard port `5432` on this machine.
 - The frontend receives the API base URL through an environment variable.
 - The backend receives its database connection string through `DATABASE_URL`.
 - Example environment files contain safe placeholders only; real passwords and credentials are ignored by Git.

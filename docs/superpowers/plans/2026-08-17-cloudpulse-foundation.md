@@ -4,14 +4,14 @@
 
 **Goal:** Build the first local CloudPulse milestone: a Next.js dashboard that reads operational data from FastAPI, with PostgreSQL used only for deployment history.
 
-**Architecture:** The browser talks only to the Next.js frontend on port 3000. Next.js calls the FastAPI HTTP/JSON interface on port 8000; FastAPI owns validation and PostgreSQL access on port 5432. Liveness remains independent of PostgreSQL, while readiness reports database availability.
+**Architecture:** The browser talks only to the Next.js frontend on port 3000. Next.js calls the FastAPI HTTP/JSON interface on port 8000; FastAPI owns validation and PostgreSQL access on port 5433. Liveness remains independent of PostgreSQL, while readiness reports database availability.
 
 **Tech Stack:** Node.js 24 LTS, Next.js 16.3.1, React 19.2.8, TypeScript, Tailwind CSS 4.3.3, Python 3.12, FastAPI 0.141.1, SQLAlchemy 2.0.52, Alembic 1.19.1, PostgreSQL 18, pytest 9.1.1, Vitest 4.1.10.
 
 ## Global Constraints
 
 - Node.js 24 LTS runs the frontend; Python 3.12 runs the backend.
-- Local ports are `3000` for Next.js, `8000` for FastAPI, and `5432` for PostgreSQL.
+- Local ports are `3000` for Next.js, `8000` for FastAPI, and `5433` for PostgreSQL because an existing PostgreSQL installation owns `5432` on this machine.
 - PostgreSQL stores deployment history only; dashboard metrics remain deterministic mock data.
 - The browser and frontend never connect directly to PostgreSQL.
 - Secrets stay in ignored `.env` files; only safe `.env.example` files are committed.
@@ -79,7 +79,7 @@ CloudPulse is an infrastructure-first learning project. The application is a sma
 ## Milestone 1
 
 ```text
-Browser → Next.js :3000 → FastAPI :8000 → PostgreSQL :5432
+Browser → Next.js :3000 → FastAPI :8000 → PostgreSQL :5433
 ```
 
 The frontend shows a small infrastructure dashboard. FastAPI exposes health, readiness, dashboard, and deployment endpoints. PostgreSQL stores deployment history only.
@@ -169,12 +169,15 @@ dev = [
 pythonpath = ["."]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
 ```
 
 Create `backend/.env.example`:
 
 ```dotenv
-DATABASE_URL=postgresql+asyncpg://cloudpulse:cloudpulse@localhost:5432/cloudpulse
+DATABASE_URL=postgresql+asyncpg://cloudpulse:cloudpulse@localhost:5433/cloudpulse
 FRONTEND_ORIGIN=http://localhost:3000
 ```
 
@@ -265,7 +268,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql+asyncpg://cloudpulse:cloudpulse@localhost:5432/cloudpulse"
+    database_url: str = "postgresql+asyncpg://cloudpulse:cloudpulse@localhost:5433/cloudpulse"
     frontend_origin: str = "http://localhost:3000"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -430,18 +433,20 @@ git commit -m "feat: add CloudPulse health and dashboard API"
 
 ```bash
 brew install postgresql@18
+brew services stop postgresql@18
+sed -i '' 's/^#port = 5432/port = 5433/' /opt/homebrew/var/postgresql@18/postgresql.conf
 brew services start postgresql@18
-/opt/homebrew/opt/postgresql@18/bin/pg_isready
+/opt/homebrew/opt/postgresql@18/bin/pg_isready -p 5433
 ```
 
-Expected: `pg_isready` reports `accepting connections` on port 5432.
+Expected: `pg_isready` reports `accepting connections` on port 5433. The Homebrew cluster uses 5433 so the pre-existing `/Library/PostgreSQL/18` server can retain port 5432.
 
 Create the local role and database:
 
 ```bash
-/opt/homebrew/opt/postgresql@18/bin/createuser --login cloudpulse
-/opt/homebrew/opt/postgresql@18/bin/createdb --owner=cloudpulse cloudpulse
-/opt/homebrew/opt/postgresql@18/bin/psql -d postgres -c "ALTER ROLE cloudpulse WITH PASSWORD 'cloudpulse';"
+/opt/homebrew/opt/postgresql@18/bin/createuser -p 5433 --login cloudpulse
+/opt/homebrew/opt/postgresql@18/bin/createdb -p 5433 --owner=cloudpulse cloudpulse
+/opt/homebrew/opt/postgresql@18/bin/psql -p 5433 -d postgres -c "ALTER ROLE cloudpulse WITH PASSWORD 'cloudpulse';"
 ```
 
 Expected: role and database creation succeeds; the password is local-only and must not be reused outside development.
@@ -551,8 +556,9 @@ Create `backend/app/database.py`:
 
 ```python
 from collections.abc import AsyncIterator
-from typing import Literal
+from typing import Annotated, Literal
 
+from fastapi import Depends
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -560,7 +566,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.settings import get_settings
 
 
-engine = create_async_engine(get_settings().database_url, pool_pre_ping=True)
+DatabaseStatus = Literal["up", "down"]
+
+engine = create_async_engine(
+    get_settings().database_url,
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=5,
+)
 session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
 
@@ -569,13 +582,19 @@ async def get_session() -> AsyncIterator[AsyncSession]:
         yield session
 
 
-async def get_database_status() -> AsyncIterator[Literal["up", "down"]]:
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+
+async def get_database_status() -> DatabaseStatus:
     try:
         async with engine.connect() as connection:
             await connection.execute(text("SELECT 1"))
-        yield "up"
+        return "up"
     except SQLAlchemyError:
-        yield "down"
+        return "down"
+
+
+DatabaseStatusDep = Annotated[DatabaseStatus, Depends(get_database_status)]
 ```
 
 Create `backend/app/models.py`:
@@ -583,7 +602,7 @@ Create `backend/app/models.py`:
 ```python
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, func
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, Identity, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -593,13 +612,19 @@ class Base(DeclarativeBase):
 
 class Deployment(Base):
     __tablename__ = "deployments"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('successful', 'failed', 'running')",
+            name="deployments_status_check",
+        ),
+    )
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    version: Mapped[str] = mapped_column(String(32))
-    environment: Mapped[str] = mapped_column(String(32))
-    status: Mapped[str] = mapped_column(String(32))
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    version: Mapped[str] = mapped_column(Text)
+    environment: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text)
     deployed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+        DateTime(timezone=True), server_default=func.now(), index=True
     )
 ```
 
@@ -888,6 +913,9 @@ dev = [
 pythonpath = ["."]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
 ```
 
 Run `python -m pip install -e '.[dev]'`. Alembic uses the synchronous Psycopg 3 driver while the application uses `asyncpg`.
@@ -910,20 +938,35 @@ depends_on: Sequence[str] | None = None
 def upgrade() -> None:
     op.create_table(
         "deployments",
-        sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("version", sa.String(length=32), nullable=False),
-        sa.Column("environment", sa.String(length=32), nullable=False),
-        sa.Column("status", sa.String(length=32), nullable=False),
+        sa.Column(
+            "id",
+            sa.BigInteger(),
+            sa.Identity(always=True),
+            primary_key=True,
+        ),
+        sa.Column("version", sa.Text(), nullable=False),
+        sa.Column("environment", sa.Text(), nullable=False),
+        sa.Column("status", sa.Text(), nullable=False),
         sa.Column(
             "deployed_at",
             sa.DateTime(timezone=True),
             server_default=sa.func.now(),
             nullable=False,
         ),
+        sa.CheckConstraint(
+            "status IN ('successful', 'failed', 'running')",
+            name="deployments_status_check",
+        ),
+    )
+    op.create_index(
+        "ix_deployments_deployed_at",
+        "deployments",
+        ["deployed_at"],
     )
 
 
 def downgrade() -> None:
+    op.drop_index("ix_deployments_deployed_at", table_name="deployments")
     op.drop_table("deployments")
 ```
 
@@ -1470,7 +1513,7 @@ Create `docs/architecture.md`:
 Browser
   → Next.js on localhost:3000
   → FastAPI on localhost:8000
-  → PostgreSQL on localhost:5432
+  → PostgreSQL on localhost:5433
 ```
 
 Next.js owns presentation. FastAPI owns the API contract, validation, and database access. PostgreSQL stores deployment history only. The separation lets each process later become an independent container and Kubernetes workload.
@@ -1498,7 +1541,7 @@ Create `docs/troubleshooting.md`:
 ```bash
 lsof -nP -iTCP:3000 -sTCP:LISTEN
 lsof -nP -iTCP:8000 -sTCP:LISTEN
-lsof -nP -iTCP:5432 -sTCP:LISTEN
+lsof -nP -iTCP:5433 -sTCP:LISTEN
 ```
 
 An empty result means no process is listening on that port.
@@ -1515,7 +1558,7 @@ curl -i http://localhost:8000/ready
 ## Check PostgreSQL
 
 ```bash
-/opt/homebrew/opt/postgresql@18/bin/pg_isready
+/opt/homebrew/opt/postgresql@18/bin/pg_isready -p 5433
 brew services list | grep postgresql
 ```
 
@@ -1540,7 +1583,7 @@ CloudPulse is an infrastructure-first learning project. The application is a sma
 ## Architecture
 
 ```text
-Browser → Next.js :3000 → FastAPI :8000 → PostgreSQL :5432
+Browser → Next.js :3000 → FastAPI :8000 → PostgreSQL :5433
 ```
 
 The frontend shows a small infrastructure dashboard. FastAPI exposes health, readiness, dashboard, and deployment endpoints. PostgreSQL stores deployment history only.
@@ -1557,10 +1600,12 @@ The frontend shows a small infrastructure dashboard. FastAPI exposes health, rea
 
 ```bash
 brew install postgresql@18
+brew services stop postgresql@18
+sed -i '' 's/^#port = 5432/port = 5433/' /opt/homebrew/var/postgresql@18/postgresql.conf
 brew services start postgresql@18
-/opt/homebrew/opt/postgresql@18/bin/createuser --login cloudpulse
-/opt/homebrew/opt/postgresql@18/bin/createdb --owner=cloudpulse cloudpulse
-/opt/homebrew/opt/postgresql@18/bin/psql -d postgres -c "ALTER ROLE cloudpulse WITH PASSWORD 'cloudpulse';"
+/opt/homebrew/opt/postgresql@18/bin/createuser -p 5433 --login cloudpulse
+/opt/homebrew/opt/postgresql@18/bin/createdb -p 5433 --owner=cloudpulse cloudpulse
+/opt/homebrew/opt/postgresql@18/bin/psql -p 5433 -d postgres -c "ALTER ROLE cloudpulse WITH PASSWORD 'cloudpulse';"
 ```
 
 The committed password is a local demonstration value only and must never be reused for cloud or production infrastructure.
