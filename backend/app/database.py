@@ -33,7 +33,7 @@ async def get_database_status() -> DatabaseStatus:
         async with engine.connect() as connection:
             await connection.execute(text("SELECT 1"))
         return "up"
-    except SQLAlchemyError:
+    except (SQLAlchemyError, OSError):
         return "down"
 
 

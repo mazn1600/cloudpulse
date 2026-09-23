@@ -1,7 +1,9 @@
 from typing import Literal
 
+import pytest
 from fastapi.testclient import TestClient
 
+import app.database as database_module
 from app.database import get_database_status
 from app.main import app
 
@@ -36,3 +38,22 @@ def test_readiness_is_unavailable_when_database_is_down() -> None:
         "status": "not_ready",
         "dependencies": {"database": "down"},
     }
+
+
+class RefusedEngine:
+    def connect(self) -> "RefusedEngine":
+        return self
+
+    async def __aenter__(self) -> None:
+        raise ConnectionRefusedError("connection refused")
+
+    async def __aexit__(self, *args: object) -> None:
+        return None
+
+
+async def test_database_status_is_down_when_connection_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(database_module, "engine", RefusedEngine())
+
+    assert await get_database_status() == "down"
