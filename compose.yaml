@@ -1,0 +1,57 @@
+name: cloudpulse
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: cloudpulse
+      POSTGRES_PASSWORD: cloudpulse
+      POSTGRES_DB: cloudpulse
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cloudpulse -d cloudpulse"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    build: ./backend
+    image: cloudpulse-backend
+    command: ["sh", "-c", "alembic upgrade head && python -m scripts.seed"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cloudpulse:cloudpulse@db:5432/cloudpulse
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    build: ./backend
+    image: cloudpulse-backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cloudpulse:cloudpulse@db:5432/cloudpulse
+      FRONTEND_ORIGIN: http://localhost:3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  frontend:
+    build: ./frontend
+    image: cloudpulse-frontend
+    environment:
+      API_URL: http://backend:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  db-data:

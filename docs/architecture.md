@@ -11,7 +11,7 @@ Browser
 
 Next.js owns presentation. FastAPI owns the API contract, validation, and database access. PostgreSQL stores deployment history only. The separation lets each process later become an independent container and Kubernetes workload.
 
-The dashboard page is server-rendered on every request, so the **Next.js server** calls FastAPI — the browser never contacts FastAPI or PostgreSQL directly. The API address comes from `NEXT_PUBLIC_API_URL`; it will change when the services move into containers, where `localhost` refers to the container itself.
+The dashboard page is server-rendered on every request, so the **Next.js server** calls FastAPI — the browser never contacts FastAPI or PostgreSQL directly. The API address comes from `API_URL`; it will change when the services move into containers, where `localhost` refers to the container itself.
 
 ## Health model
 

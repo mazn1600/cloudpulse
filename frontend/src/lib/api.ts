@@ -1,6 +1,6 @@
 import type { DashboardResponse, Deployment } from "@/lib/types";
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const apiUrl = process.env.API_URL ?? "http://localhost:8000";
 
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(`${apiUrl}${path}`, { cache: "no-store" });

@@ -27,7 +27,15 @@ winget install OpenJS.NodeJS.LTS
 
 Docker Desktop must be running for PostgreSQL. Node.js 24 (see `.node-version`) and Python 3.12 are required.
 
-## Local development
+## Run everything with Docker Compose
+
+```powershell
+docker compose up --build
+```
+
+Open `http://localhost:3000`. Compose starts PostgreSQL, runs migrations and the seed as a one-off `migrate` job, then starts the backend and frontend once each dependency is healthy. PostgreSQL is only reachable from inside the Compose network. Stop with `Ctrl+C`, or `docker compose down` (add `-v` to also delete the database volume).
+
+## Local development without containers
 
 Run each long-running server in its own terminal.
 
