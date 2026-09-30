@@ -16,6 +16,7 @@ The frontend shows a small infrastructure dashboard. FastAPI exposes health, rea
 - `frontend/` — Next.js, TypeScript, and Tailwind CSS
 - `backend/` — FastAPI and PostgreSQL access
 - `deploy/nginx/` — Nginx reverse proxy config
+- `deploy/ssh/` — SSH server hardening config
 - `docs/` — architecture and troubleshooting notes
 
 ## Prerequisites
@@ -50,6 +51,19 @@ sudo nginx -t && sudo systemctl reload nginx
 ```
 
 Open `http://localhost`. After editing `deploy/nginx/cloudpulse.conf`, copy it again and rerun the last line. A `502 Bad Gateway` means Nginx is up but an upstream app is not running; check `docker compose ps` and `sudo tail /var/log/nginx/error.log`.
+
+## SSH access to the Ubuntu server
+
+Key-only SSH, no passwords and no root login. In Ubuntu:
+
+```bash
+sudo apt install -y openssh-server
+sudo systemctl enable --now ssh
+sudo cp /mnt/c/Users/Gigabyte/Documents/GitHub/cloudpulse/deploy/ssh/00-cloudpulse-hardening.conf /etc/ssh/sshd_config.d/
+sudo sshd -t && sudo systemctl reload ssh
+```
+
+Your public key (`~/.ssh/id_ed25519.pub` on Windows, created with `ssh-keygen -t ed25519`) must be in `~/.ssh/authorized_keys` on the server before passwords are turned off. Connect from PowerShell with `ssh <user>@localhost`. Keep an existing session open while changing SSH settings, and test the login from a second terminal.
 
 ## Local development without containers
 
