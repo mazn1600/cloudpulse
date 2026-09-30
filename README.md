@@ -5,7 +5,8 @@ CloudPulse is an infrastructure-first learning project. The application is a sma
 ## Architecture
 
 ```text
-Browser → Next.js :3000 → FastAPI :8000 → PostgreSQL :5433
+Browser → Nginx :80 ─┬→ Next.js :3000 → FastAPI :8000 → PostgreSQL
+                     └→ FastAPI :8000 (/api/, /health, /ready)
 ```
 
 The frontend shows a small infrastructure dashboard. FastAPI exposes health, readiness, dashboard, and deployment endpoints. PostgreSQL stores deployment history only. See `docs/architecture.md`.
@@ -14,6 +15,7 @@ The frontend shows a small infrastructure dashboard. FastAPI exposes health, rea
 
 - `frontend/` — Next.js, TypeScript, and Tailwind CSS
 - `backend/` — FastAPI and PostgreSQL access
+- `deploy/nginx/` — Nginx reverse proxy config
 - `docs/` — architecture and troubleshooting notes
 
 ## Prerequisites
@@ -34,6 +36,20 @@ docker compose up --build
 ```
 
 Open `http://localhost:3000`. Compose starts PostgreSQL, runs migrations and the seed as a one-off `migrate` job, then starts the backend and frontend once each dependency is healthy. PostgreSQL is only reachable from inside the Compose network. Stop with `Ctrl+C`, or `docker compose down` (add `-v` to also delete the database volume).
+
+## Nginx reverse proxy (Ubuntu on WSL)
+
+Nginx runs in Ubuntu 24.04 on WSL and puts the whole app behind port 80: `/api/`, `/health` and `/ready` go to the backend on `127.0.0.1:8000`, everything else to the frontend on `127.0.0.1:3000`. Start the Compose stack first, then in Ubuntu:
+
+```bash
+sudo apt install -y nginx
+sudo cp /mnt/c/Users/Gigabyte/Documents/GitHub/cloudpulse/deploy/nginx/cloudpulse.conf /etc/nginx/sites-available/cloudpulse
+sudo ln -s /etc/nginx/sites-available/cloudpulse /etc/nginx/sites-enabled/cloudpulse
+sudo rm /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Open `http://localhost`. After editing `deploy/nginx/cloudpulse.conf`, copy it again and rerun the last line. A `502 Bad Gateway` means Nginx is up but an upstream app is not running; check `docker compose ps` and `sudo tail /var/log/nginx/error.log`.
 
 ## Local development without containers
 
