@@ -1,5 +1,7 @@
 # CloudPulse
 
+[![CI](https://github.com/mazn1600/cloudpulse/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mazn1600/cloudpulse/actions/workflows/ci.yml)
+
 CloudPulse is an infrastructure-first learning project. The application is a small workload used to learn Linux, networking, Docker, AWS, CI/CD, Kubernetes, Terraform, monitoring, security, and troubleshooting.
 
 ## Architecture
@@ -109,6 +111,10 @@ Open `http://localhost:3000`.
 cd backend; .\.venv\Scripts\Activate.ps1; pytest -q
 cd frontend; npm test; npm run lint; npm run build
 ```
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push to `main` and on every pull request. The backend tests and the frontend lint and tests run in parallel; both Docker images are built only if they pass. Make changes on a branch, open a pull request, and merge once the checks are green.
 
 ## Operational checks
 
