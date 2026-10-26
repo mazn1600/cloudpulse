@@ -116,6 +116,10 @@ cd frontend; npm test; npm run lint; npm run build
 
 `.github/workflows/ci.yml` runs on every push to `main` and on every pull request. The backend tests and the frontend lint and tests run in parallel; both Docker images are built only if they pass. Make changes on a branch, open a pull request, and merge once the checks are green.
 
+## Deploy on AWS EC2
+
+`docs/aws-ec2-deployment.md` runs the same Compose stack, Nginx and SSH setup on one EC2 instance, with a security group that exposes only port 80 and SSH from one IP.
+
 ## Operational checks
 
 - API liveness: `curl.exe -i http://localhost:8000/health`
